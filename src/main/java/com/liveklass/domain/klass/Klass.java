@@ -113,6 +113,31 @@ public class Klass extends BaseTimeEntity {
         this.status = KlassStatus.DRAFT;
     }
 
+    public void update(String title, String description, BigDecimal price, Integer maxCapacity,
+                       LocalDate startDate, LocalDate endDate, LocalDate enrollmentDeadline,
+                       Integer cancellationDeadlineDays) {
+        validateDraft();
+        if (price != null) validatePrice(price);
+        if (maxCapacity != null) validateMaxCapacity(maxCapacity);
+        if (cancellationDeadlineDays != null) validateCancellationDeadlineDays(cancellationDeadlineDays);
+        this.title = title != null ? title : this.title;
+        this.description = description != null ? description : this.description;
+        this.price = price != null ? price : this.price;
+        this.maxCapacity = maxCapacity != null ? maxCapacity : this.maxCapacity;
+        this.period = KlassPeriod.create(
+                startDate != null ? startDate : period.getStartDate(),
+                endDate != null ? endDate : period.getEndDate(),
+                enrollmentDeadline != null ? enrollmentDeadline : period.getEnrollmentDeadline()
+        );
+        this.cancellationDeadlineDays = cancellationDeadlineDays != null ? cancellationDeadlineDays : this.cancellationDeadlineDays;
+    }
+
+    public void validateDeletable() {
+        if (status != KlassStatus.DRAFT) {
+            throw new IllegalStateException("초안(DRAFT) 상태의 강의만 삭제할 수 있습니다.");
+        }
+    }
+
     public void changeTitle(String newTitle) {
         validateDraft();
         this.title = newTitle;
