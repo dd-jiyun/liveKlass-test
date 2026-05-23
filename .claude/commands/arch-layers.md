@@ -61,8 +61,8 @@ dto        → (nothing)
 
 ## Lombok Rules
 
-- Allowed: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`
-- Forbidden: `@Setter`, `@Data`, `@Builder`, `@AllArgsConstructor`, `@RequiredArgsConstructor`
+- Allowed: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`, `@RequiredArgsConstructor`
+- Forbidden: `@Setter`, `@Data`, `@Builder`, `@AllArgsConstructor`
 
 ## Domain Object Construction
 
