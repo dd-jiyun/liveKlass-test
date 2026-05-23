@@ -1,6 +1,6 @@
 package com.liveklass.domain.enrollment;
 
-import com.liveklass.global.entity.BaseTimeEntity;
+import com.liveklass.domain.BaseTimeEntity;
 import com.liveklass.domain.klass.Klass;
 import com.liveklass.domain.user.User;
 import jakarta.persistence.Column;
