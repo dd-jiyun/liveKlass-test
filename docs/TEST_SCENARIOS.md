@@ -32,8 +32,8 @@
 | E-02 | PENDING 상태에서 결제 완료 | CONFIRMED + 이력 기록 |
 | E-03 | PENDING 20분 만료 | 자동 CANCELLED + 수강 인원 -1 |
 | E-04 | 만료된 PENDING에 결제 시도 | 거부 |
-| E-05 | CONFIRMED 후 취소 가능 기간 내 취소 | CANCELLED + 수강 인원 -1 |
-| E-06 | CONFIRMED 후 취소 가능 기간 초과 취소 시도 | 거부 |
+| E-05 | CONFIRMED 후 취소 가능 기간 내 취소 (강의 시작 N일 전 이내) | CANCELLED + 수강 인원 -1 |
+| E-06 | CONFIRMED 후 취소 가능 기간 초과 취소 시도 (강의 시작 N일 이내) | 거부 |
 | E-07 | PENDING 상태 강의 중복 신청 | 409 거부 |
 | E-08 | CONFIRMED 상태 강의 중복 신청 | 409 거부 |
 | E-09 | CANCELLED 후 동일 강의 재신청 | 허용 (PENDING 생성) |
