@@ -116,8 +116,7 @@ public class Enrollment extends BaseTimeEntity {
         if (!klass.isCancellable()) {
             throw new IllegalStateException("취소가 불가능한 강의입니다.");
         }
-        LocalDateTime cancellationDeadline = confirmedAt.plusDays(klass.getCancellationDeadlineDays());
-        if (now.isAfter(cancellationDeadline)) {
+        if (now.isAfter(klass.cancellationDeadlineAt())) {
             throw new IllegalStateException("취소 가능 기간이 초과되었습니다.");
         }
     }

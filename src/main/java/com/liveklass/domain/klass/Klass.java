@@ -22,6 +22,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Getter
@@ -61,6 +62,13 @@ public class Klass extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private KlassStatus status;
+
+    public static Klass create(User creator, String title, String description, BigDecimal price,
+                               int maxCapacity, LocalDate startDate, LocalDate endDate,
+                               LocalDate enrollmentDeadline) {
+        return create(creator, title, description, price, maxCapacity, startDate, endDate,
+                enrollmentDeadline, EnrollmentPolicy.DEFAULT_CANCELLATION_DEADLINE_DAYS);
+    }
 
     public static Klass create(User creator, String title, String description, BigDecimal price,
                                int maxCapacity, LocalDate startDate, LocalDate endDate,
@@ -143,6 +151,10 @@ public class Klass extends BaseTimeEntity {
 
     public boolean isCancellable() {
         return cancellationDeadlineDays > 0;
+    }
+
+    public LocalDateTime cancellationDeadlineAt() {
+        return period.getStartDate().minusDays(cancellationDeadlineDays).atTime(LocalTime.MAX);
     }
 
     private static void validatePrice(BigDecimal price) {

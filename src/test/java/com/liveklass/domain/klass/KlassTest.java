@@ -1,5 +1,6 @@
 package com.liveklass.domain.klass;
 
+import com.liveklass.domain.enrollment.EnrollmentPolicy;
 import com.liveklass.domain.user.User;
 import com.liveklass.domain.user.UserRole;
 import org.junit.jupiter.api.DisplayName;
@@ -270,6 +271,19 @@ class KlassTest {
             );
 
             assertThat(klass.isCancellable()).isFalse();
+        }
+
+        @Test
+        @DisplayName("취소 가능 기간을 지정하지 않으면 기본값 7일로 생성된다")
+        void shouldApplyDefaultCancellationDeadlineDaysWhenNotSpecified() {
+            Klass klass = Klass.create(
+                    CREATOR, "강의", "설명", BigDecimal.valueOf(10000), 30,
+                    LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
+                    LocalDate.now().plusDays(5)
+            );
+
+            assertThat(klass.getCancellationDeadlineDays())
+                    .isEqualTo(EnrollmentPolicy.DEFAULT_CANCELLATION_DEADLINE_DAYS);
         }
     }
 }
