@@ -1,9 +1,5 @@
 # liveKlass Flexibility & Extensibility Rules
 
-If $ARGUMENTS is provided, validate only those files. Otherwise, validate all changed `.java` files.
-
----
-
 ## Interface Abstraction
 
 ### Notification

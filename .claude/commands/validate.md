@@ -8,15 +8,15 @@ Run the following checks in order and produce a unified report.
 
 ## 1. Layer Dependencies & Coupling
 
-Apply rules from `/project:arch-layers`.
+Read and apply rules from `.claude/commands/arch-layers.md`.
 
 ## 2. Exception Handling
 
-Apply rules from `/project:arch-exceptions`.
+Read and apply rules from `.claude/commands/arch-exceptions.md`.
 
 ## 3. Flexibility & Extensibility
 
-Apply rules from `/project:arch-extensibility`.
+Read and apply rules from `.claude/commands/arch-extensibility.md`.
 
 ---
 

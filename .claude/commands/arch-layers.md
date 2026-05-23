@@ -1,9 +1,5 @@
 # liveKlass Layer Dependency & Coupling Rules
 
-If $ARGUMENTS is provided, validate only those files. Otherwise, validate all changed `.java` files.
-
----
-
 ## Package Structure
 
 ```
@@ -77,3 +73,28 @@ dto        → (nothing)
 
 - `@ManyToOne` without `fetch = FetchType.LAZY` is a violation
 - `@OneToMany` is forbidden — use queries instead of bidirectional navigation
+
+---
+
+## Naming Rules
+
+### Methods
+
+- Boolean query methods must use `is` / `has` prefix: `isFull()`, `isFree()`, `isCancellable()`
+- State transition methods must use verb form matching the transition: `open()`, `close()`, `cancel()`
+- Validation methods must use `validate` prefix: `validateEnrollable()`, `validatePrice()`
+- Avoid vague names: `process`, `handle`, `manage`, `doSomething` are violations
+
+### Variables
+
+- Local variables must express what the value means, not its type
+  - Violation: `int deadlineDays = klass.getCancellationDeadlineDays()`
+  - Allowed: `LocalDateTime cancellationDeadline = confirmedAt.plusDays(...)`
+- Do not abbreviate unless the abbreviation is universally understood (`now`, `id` are fine)
+
+### Constants
+
+- All magic numbers must be extracted to `EnrollmentPolicy` (see arch-extensibility.md)
+- Domain boolean rules that inspect a field must be encapsulated as a method on the owning entity
+  - Violation: `klass.getPrice().compareTo(BigDecimal.ZERO) == 0` scattered across domain classes
+  - Allowed: `klass.isFree()` — single source of truth on `Klass`

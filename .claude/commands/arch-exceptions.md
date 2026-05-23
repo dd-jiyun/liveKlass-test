@@ -1,9 +1,5 @@
 # liveKlass Exception Handling Rules
 
-If $ARGUMENTS is provided, validate only those files. Otherwise, validate all changed `.java` files.
-
----
-
 ## Exception Hierarchy
 
 ```
