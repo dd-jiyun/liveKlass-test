@@ -79,7 +79,7 @@ erDiagram
 | 컬럼 | 타입 | 제약 | 설명 |
 |------|------|------|------|
 | id | BIGINT | PK, AUTO_INCREMENT | |
-| name | VARCHAR(100) | NOT NULL | |
+| name | VARCHAR(20) | NOT NULL | |
 | email | VARCHAR(255) | NOT NULL, UNIQUE | |
 | role | ENUM('STUDENT', 'CREATOR') | NOT NULL, DEFAULT 'STUDENT' | 승격 가능 |
 | created_at | DATETIME | NOT NULL | |
