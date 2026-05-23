@@ -271,7 +271,7 @@ class EnrollmentTest {
 
             assertThatThrownBy(() -> klass.changePrice(BigDecimal.valueOf(5000)))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("수강료");
+                    .hasMessageContaining("DRAFT");
         }
 
         @Test
@@ -281,7 +281,7 @@ class EnrollmentTest {
 
             assertThatThrownBy(() -> klass.changeMaxCapacity(10))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("정원");
+                    .hasMessageContaining("DRAFT");
         }
     }
 }

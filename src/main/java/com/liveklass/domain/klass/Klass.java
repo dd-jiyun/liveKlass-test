@@ -90,6 +90,9 @@ public class Klass extends BaseTimeEntity {
     }
 
     public void open(LocalDateTime now) {
+        if (status != KlassStatus.DRAFT) {
+            throw new IllegalStateException("DRAFT 상태에서만 OPEN 전환이 가능합니다.");
+        }
         if (period.hasEnrollmentDeadlinePassed(now.toLocalDate())) {
             throw new IllegalStateException("마감일이 이미 지나 OPEN 전환이 불가합니다.");
         }
@@ -97,7 +100,38 @@ public class Klass extends BaseTimeEntity {
     }
 
     public void close() {
+        if (status != KlassStatus.OPEN) {
+            throw new IllegalStateException("OPEN 상태에서만 CLOSED 전환이 가능합니다.");
+        }
         this.status = KlassStatus.CLOSED;
+    }
+
+    public void reopen() {
+        if (status != KlassStatus.CLOSED) {
+            throw new IllegalStateException("CLOSED 상태에서만 초안으로 되돌릴 수 있습니다.");
+        }
+        this.status = KlassStatus.DRAFT;
+    }
+
+    public void changeTitle(String newTitle) {
+        validateDraft();
+        this.title = newTitle;
+    }
+
+    public void changeDescription(String newDescription) {
+        validateDraft();
+        this.description = newDescription;
+    }
+
+    public void changePeriod(LocalDate startDate, LocalDate endDate, LocalDate enrollmentDeadline) {
+        validateDraft();
+        this.period = KlassPeriod.create(startDate, endDate, enrollmentDeadline);
+    }
+
+    public void changeCancellationDeadlineDays(int days) {
+        validateDraft();
+        validateCancellationDeadlineDays(days);
+        this.cancellationDeadlineDays = days;
     }
 
     public void closeIfDeadlineReached(LocalDateTime now) {
@@ -128,17 +162,21 @@ public class Klass extends BaseTimeEntity {
     }
 
     public void changePrice(BigDecimal newPrice) {
-        if (status != KlassStatus.DRAFT) {
-            throw new IllegalStateException("수강료는 초안(DRAFT) 상태에서만 변경할 수 있습니다.");
-        }
+        validateDraft();
+        validatePrice(newPrice);
         this.price = newPrice;
     }
 
     public void changeMaxCapacity(int newMaxCapacity) {
-        if (status != KlassStatus.DRAFT) {
-            throw new IllegalStateException("최대 정원은 초안(DRAFT) 상태에서만 변경할 수 있습니다.");
-        }
+        validateDraft();
+        validateMaxCapacity(newMaxCapacity);
         this.maxCapacity = newMaxCapacity;
+    }
+
+    private void validateDraft() {
+        if (status != KlassStatus.DRAFT) {
+            throw new IllegalStateException("초안(DRAFT) 상태에서만 수정할 수 있습니다.");
+        }
     }
 
     public boolean isFull() {

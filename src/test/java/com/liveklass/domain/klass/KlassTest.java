@@ -116,6 +116,7 @@ class KlassTest {
             klass.open(LocalDateTime.now());
             klass.closeIfDeadlineReached(LocalDateTime.now().plusDays(2));
 
+            klass.reopen();
             klass.extendDeadline(LocalDate.now().plusDays(9));
             klass.open(LocalDateTime.now());
 
@@ -129,6 +130,8 @@ class KlassTest {
             klass.open(LocalDateTime.now());
             LocalDateTime afterDeadline = LocalDateTime.now().plusDays(2);
             klass.closeIfDeadlineReached(afterDeadline);
+
+            klass.reopen();
 
             assertThatThrownBy(() -> klass.open(afterDeadline))
                     .isInstanceOf(IllegalStateException.class)

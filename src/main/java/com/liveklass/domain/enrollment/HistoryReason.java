@@ -4,5 +4,6 @@ public enum HistoryReason {
     USER_ENROLL,
     PAYMENT_CONFIRMED,
     USER_CANCEL,
-    PENDING_EXPIRED
+    PENDING_EXPIRED,
+    WAITLIST_CONVERTED
 }
