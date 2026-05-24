@@ -117,7 +117,7 @@ class KlassTest {
             klass.closeIfDeadlineReached(LocalDateTime.now().plusDays(2));
 
             klass.reopen();
-            klass.extendDeadline(LocalDate.now().plusDays(9));
+            klass.update(null, null, null, null, null, null, LocalDate.now().plusDays(9), null);
             klass.open(LocalDateTime.now());
 
             assertThat(klass.getStatus()).isEqualTo(KlassStatus.OPEN);

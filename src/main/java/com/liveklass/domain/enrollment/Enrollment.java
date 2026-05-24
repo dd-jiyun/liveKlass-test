@@ -56,16 +56,6 @@ public class Enrollment extends BaseTimeEntity {
         return enrollment;
     }
 
-    public static Enrollment createConfirmed(User user, Klass klass, LocalDateTime now) {
-        klass.increaseEnrolledCount();
-        Enrollment enrollment = new Enrollment();
-        enrollment.user = user;
-        enrollment.klass = klass;
-        enrollment.status = EnrollmentStatus.CONFIRMED;
-        enrollment.confirmedAt = now;
-        return enrollment;
-    }
-
     public void confirm(LocalDateTime now) {
         validateConfirmable(now);
         this.status = EnrollmentStatus.CONFIRMED;

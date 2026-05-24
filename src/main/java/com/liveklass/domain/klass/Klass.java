@@ -117,19 +117,18 @@ public class Klass extends BaseTimeEntity {
                        LocalDate startDate, LocalDate endDate, LocalDate enrollmentDeadline,
                        Integer cancellationDeadlineDays) {
         validateDraft();
-        if (price != null) validatePrice(price);
-        if (maxCapacity != null) validateMaxCapacity(maxCapacity);
-        if (cancellationDeadlineDays != null) validateCancellationDeadlineDays(cancellationDeadlineDays);
-        this.title = title != null ? title : this.title;
-        this.description = description != null ? description : this.description;
-        this.price = price != null ? price : this.price;
-        this.maxCapacity = maxCapacity != null ? maxCapacity : this.maxCapacity;
-        this.period = KlassPeriod.create(
-                startDate != null ? startDate : period.getStartDate(),
-                endDate != null ? endDate : period.getEndDate(),
-                enrollmentDeadline != null ? enrollmentDeadline : period.getEnrollmentDeadline()
-        );
-        this.cancellationDeadlineDays = cancellationDeadlineDays != null ? cancellationDeadlineDays : this.cancellationDeadlineDays;
+        if (title != null) changeTitle(title);
+        if (description != null) changeDescription(description);
+        if (price != null) changePrice(price);
+        if (maxCapacity != null) changeMaxCapacity(maxCapacity);
+        if (startDate != null || endDate != null || enrollmentDeadline != null) {
+            changePeriod(
+                    startDate != null ? startDate : period.getStartDate(),
+                    endDate != null ? endDate : period.getEndDate(),
+                    enrollmentDeadline != null ? enrollmentDeadline : period.getEnrollmentDeadline()
+            );
+        }
+        if (cancellationDeadlineDays != null) changeCancellationDeadlineDays(cancellationDeadlineDays);
     }
 
     public void validateDeletable() {
@@ -163,10 +162,6 @@ public class Klass extends BaseTimeEntity {
         if (status == KlassStatus.OPEN && period.hasEnrollmentDeadlinePassed(now.toLocalDate())) {
             this.status = KlassStatus.CLOSED;
         }
-    }
-
-    public void extendDeadline(LocalDate newDeadline) {
-        this.period = period.withExtendedDeadline(newDeadline);
     }
 
     public void validateEnrollable(LocalDateTime now) {
