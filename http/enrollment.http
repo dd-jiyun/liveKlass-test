@@ -1,0 +1,58 @@
+### 공통 변수
+# 앱 실행 시 DataInitializer 콘솔 출력에서 ID를 확인하세요.
+@host = http://localhost:8080
+@studentId = 2
+@klassId = 1
+@id = 1
+
+### 수강 신청 (유료 강의 → PENDING 생성)
+POST {{host}}/api/enrollments
+Content-Type: application/json
+X-User-Id: {{studentId}}
+
+{
+  "klassId": {{klassId}}
+}
+
+### 결제 확정 (PENDING → CONFIRMED, 20분 이내)
+POST {{host}}/api/enrollments/{{id}}/confirm
+X-User-Id: {{studentId}}
+
+### 수강 취소 (PENDING 또는 취소 가능 기간 내 CONFIRMED)
+POST {{host}}/api/enrollments/{{id}}/cancel
+X-User-Id: {{studentId}}
+
+### 내 수강 신청 목록 조회
+GET {{host}}/api/enrollments/me
+X-User-Id: {{studentId}}
+
+### [에러 케이스] 정원 초과 강의 신청 → 409 ENROLLMENT_CAPACITY_EXCEEDED
+POST {{host}}/api/enrollments
+Content-Type: application/json
+X-User-Id: 3
+
+{
+  "klassId": {{klassId}}
+}
+
+### [에러 케이스] NOTIFIED 대기자 존재 시 신청 → 409 ENROLLMENT_WAITLIST_PRIORITY
+POST {{host}}/api/enrollments
+Content-Type: application/json
+X-User-Id: 3
+
+{
+  "klassId": {{klassId}}
+}
+
+### [에러 케이스] 중복 신청 → 409 ENROLLMENT_DUPLICATE
+POST {{host}}/api/enrollments
+Content-Type: application/json
+X-User-Id: {{studentId}}
+
+{
+  "klassId": {{klassId}}
+}
+
+### [에러 케이스] 잘못된 상태에서 확정/취소 시도 → 400 ENROLLMENT_STATE_ERROR
+POST {{host}}/api/enrollments/{{id}}/confirm
+X-User-Id: {{studentId}}

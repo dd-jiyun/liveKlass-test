@@ -1,0 +1,54 @@
+### 공통 변수
+# 앱 실행 시 DataInitializer 콘솔 출력에서 ID를 확인하세요.
+# 전제: klassId=1이 OPEN이고 student1(id=2)이 이미 수강하여 정원이 꽉 찬 상태
+@host = http://localhost:8080
+@studentId = 3
+@klassId = 1
+@id = 1
+
+### 대기 등록 (정원이 꽉 찬 OPEN 강의에만 가능)
+POST {{host}}/api/waitlists
+Content-Type: application/json
+X-User-Id: {{studentId}}
+
+{
+  "klassId": {{klassId}}
+}
+
+### 대기 → 수강 전환 (NOTIFIED 상태에서 20분 이내, 본인만 가능)
+POST {{host}}/api/waitlists/{{id}}/convert
+X-User-Id: {{studentId}}
+
+### 대기 취소 (WAITING 또는 NOTIFIED 상태, 본인만 가능)
+POST {{host}}/api/waitlists/{{id}}/cancel
+X-User-Id: {{studentId}}
+
+### [에러 케이스] 정원이 남은 강의에 대기 등록 → 400 WAITLIST_NOT_FULL
+POST {{host}}/api/waitlists
+Content-Type: application/json
+X-User-Id: {{studentId}}
+
+{
+  "klassId": 2
+}
+
+### [에러 케이스] 중복 대기 등록 → 409 WAITLIST_DUPLICATE
+POST {{host}}/api/waitlists
+Content-Type: application/json
+X-User-Id: {{studentId}}
+
+{
+  "klassId": {{klassId}}
+}
+
+### [에러 케이스] 수강 전환 시 정원 재초과 → 409 WAITLIST_CAPACITY_EXCEEDED
+POST {{host}}/api/waitlists/{{id}}/convert
+X-User-Id: {{studentId}}
+
+### [에러 케이스] 타인의 대기 항목 전환 시도 → 403 WAITLIST_FORBIDDEN
+POST {{host}}/api/waitlists/{{id}}/convert
+X-User-Id: 99
+
+### [에러 케이스] 잘못된 상태에서 전환/취소 시도 → 400 WAITLIST_STATE_ERROR
+POST {{host}}/api/waitlists/{{id}}/cancel
+X-User-Id: {{studentId}}
