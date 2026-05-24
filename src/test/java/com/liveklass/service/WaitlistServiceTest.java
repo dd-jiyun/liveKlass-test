@@ -1,4 +1,4 @@
-package com.liveklass.integration;
+package com.liveklass.service;
 
 import com.liveklass.domain.enrollment.Enrollment;
 import com.liveklass.domain.enrollment.EnrollmentStatus;
@@ -12,7 +12,6 @@ import com.liveklass.repository.EnrollmentRepository;
 import com.liveklass.repository.KlassRepository;
 import com.liveklass.repository.UserRepository;
 import com.liveklass.repository.WaitlistRepository;
-import com.liveklass.service.WaitlistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -49,20 +48,28 @@ class WaitlistServiceTest {
         }
     }
 
-    @Autowired WaitlistService waitlistService;
-    @Autowired UserRepository userRepository;
-    @Autowired KlassRepository klassRepository;
-    @Autowired WaitlistRepository waitlistRepository;
-    @Autowired EnrollmentRepository enrollmentRepository;
-    @Autowired Clock clock;
+    @Autowired
+    WaitlistService waitlistService;
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    KlassRepository klassRepository;
+    @Autowired
+    WaitlistRepository waitlistRepository;
+    @Autowired
+    EnrollmentRepository enrollmentRepository;
+    @Autowired
+    Clock clock;
 
-    User creator, student;
+    User creator, student, filler;
     Klass fullKlass;
+    Enrollment fillerEnrollment;
 
     @BeforeEach
     void setUp() {
         creator = userRepository.save(User.create("크리에이터", "creator@test.com", UserRole.CREATOR));
         student = userRepository.save(User.create("수강생", "student@test.com", UserRole.STUDENT));
+        filler = userRepository.save(User.create("선점자", "filler@test.com", UserRole.STUDENT));
 
         Klass draft = Klass.create(creator, "스프링 강의", "설명", BigDecimal.valueOf(10000),
                 1, LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
@@ -70,8 +77,7 @@ class WaitlistServiceTest {
         draft.open(LocalDateTime.now(clock));
         fullKlass = klassRepository.save(draft);
 
-        User filler = userRepository.save(User.create("선점자", "filler@test.com", UserRole.STUDENT));
-        Enrollment fillerEnrollment = Enrollment.create(filler, fullKlass, LocalDateTime.now(clock));
+        fillerEnrollment = Enrollment.create(filler, fullKlass, LocalDateTime.now(clock));
         enrollmentRepository.save(fillerEnrollment);
     }
 
@@ -179,15 +185,56 @@ class WaitlistServiceTest {
     class ConvertToEnrollment {
 
         @Test
-        @DisplayName("NOTIFIED 대기 항목을 전환하면 CONVERTED 상태가 된다")
-        void shouldConvertNotifiedWaitlistToEnrollment() {
+        @DisplayName("유료 강의의 NOTIFIED 대기 항목을 전환하면 CONVERTED 상태가 되고 PENDING 수강신청이 생성된다")
+        void shouldConvertNotifiedWaitlistToPendingEnrollmentForPaidKlass() {
             Waitlist waitlist = waitlistService.join(student.getId(), fullKlass.getId());
             waitlistService.notifyNext(fullKlass.getId());
+
+            // filler가 취소해 슬롯을 반납한 상황 시뮬레이션
+            fillerEnrollment.cancel(LocalDateTime.now(clock));
 
             waitlistService.convertToEnrollment(waitlist.getId(), student.getId());
 
             assertThat(waitlistRepository.findById(waitlist.getId()).orElseThrow().getStatus())
                     .isEqualTo(WaitlistStatus.CONVERTED);
+
+            Enrollment enrollment = enrollmentRepository
+                    .findByUserId(student.getId()).stream()
+                    .filter(e -> e.getStatus() == EnrollmentStatus.PENDING)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("PENDING 수강신청이 생성되지 않았습니다."));
+            assertThat(enrollment.getKlass().getId()).isEqualTo(fullKlass.getId());
+        }
+
+        @Test
+        @DisplayName("무료 강의의 NOTIFIED 대기 항목을 전환하면 즉시 CONFIRMED 수강신청이 생성된다")
+        void shouldConvertNotifiedWaitlistToConfirmedEnrollmentForFreeKlass() {
+            Klass freeDraft = Klass.create(creator, "무료 강의", "설명", BigDecimal.ZERO,
+                    1, LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
+                    LocalDate.now().plusDays(5), 7);
+            freeDraft.open(LocalDateTime.now(clock));
+            Klass freeKlass = klassRepository.save(freeDraft);
+
+            Enrollment freeFillerEnrollment = Enrollment.create(filler, freeKlass, LocalDateTime.now(clock));
+            freeFillerEnrollment.autoConfirmIfFree(LocalDateTime.now(clock));
+            enrollmentRepository.save(freeFillerEnrollment);
+
+            Waitlist waitlist = waitlistService.join(student.getId(), freeKlass.getId());
+            waitlistService.notifyNext(freeKlass.getId());
+
+            freeFillerEnrollment.cancel(LocalDateTime.now(clock));
+
+            waitlistService.convertToEnrollment(waitlist.getId(), student.getId());
+
+            assertThat(waitlistRepository.findById(waitlist.getId()).orElseThrow().getStatus())
+                    .isEqualTo(WaitlistStatus.CONVERTED);
+
+            Enrollment enrollment = enrollmentRepository
+                    .findByUserId(student.getId()).stream()
+                    .filter(e -> e.getStatus() == EnrollmentStatus.CONFIRMED)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("CONFIRMED 수강신청이 생성되지 않았습니다."));
+            assertThat(enrollment.getKlass().getId()).isEqualTo(freeKlass.getId());
         }
 
         @Test

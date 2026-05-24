@@ -1,4 +1,4 @@
-package com.liveklass.integration;
+package com.liveklass.service;
 
 import com.liveklass.domain.enrollment.ChangedBy;
 import com.liveklass.domain.enrollment.Enrollment;
@@ -14,7 +14,6 @@ import com.liveklass.repository.EnrollmentHistoryRepository;
 import com.liveklass.repository.EnrollmentRepository;
 import com.liveklass.repository.KlassRepository;
 import com.liveklass.repository.UserRepository;
-import com.liveklass.service.EnrollmentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -41,12 +40,18 @@ import static org.mockito.BDDMockito.given;
 @Transactional
 class EnrollmentServiceTest {
 
-    @Autowired EnrollmentService enrollmentService;
-    @Autowired UserRepository userRepository;
-    @Autowired KlassRepository klassRepository;
-    @Autowired EnrollmentRepository enrollmentRepository;
-    @Autowired EnrollmentHistoryRepository historyRepository;
-    @MockitoBean Clock clock;
+    @Autowired
+    EnrollmentService enrollmentService;
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    KlassRepository klassRepository;
+    @Autowired
+    EnrollmentRepository enrollmentRepository;
+    @Autowired
+    EnrollmentHistoryRepository historyRepository;
+    @MockitoBean
+    Clock clock;
 
     User creator, student;
     Klass klass;

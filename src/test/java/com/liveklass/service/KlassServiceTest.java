@@ -1,4 +1,4 @@
-package com.liveklass.integration;
+package com.liveklass.service;
 
 import com.liveklass.domain.klass.Klass;
 import com.liveklass.domain.klass.KlassStatus;
@@ -6,7 +6,6 @@ import com.liveklass.domain.user.User;
 import com.liveklass.domain.user.UserRole;
 import com.liveklass.repository.KlassRepository;
 import com.liveklass.repository.UserRepository;
-import com.liveklass.service.KlassService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,9 +41,12 @@ class KlassServiceTest {
         }
     }
 
-    @Autowired KlassService klassService;
-    @Autowired UserRepository userRepository;
-    @Autowired KlassRepository klassRepository;
+    @Autowired
+    KlassService klassService;
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    KlassRepository klassRepository;
 
     User creator;
 
@@ -128,8 +130,8 @@ class KlassServiceTest {
 
             Klass anotherDraft = savedDraftKlass();
 
-            List<Klass> openKlasses = klassService.findAll(KlassStatus.OPEN);
-            List<Klass> draftKlasses = klassService.findAll(KlassStatus.DRAFT);
+            List<Klass> openKlasses = klassService.findAll(creator.getId(), KlassStatus.OPEN);
+            List<Klass> draftKlasses = klassService.findAll(creator.getId(), KlassStatus.DRAFT);
 
             assertThat(openKlasses).hasSize(1);
             assertThat(draftKlasses).hasSize(1);
@@ -141,7 +143,7 @@ class KlassServiceTest {
             savedDraftKlass();
             savedDraftKlass();
 
-            List<Klass> all = klassService.findAll(null);
+            List<Klass> all = klassService.findAll(creator.getId(), null);
 
             assertThat(all).hasSizeGreaterThanOrEqualTo(2);
         }
