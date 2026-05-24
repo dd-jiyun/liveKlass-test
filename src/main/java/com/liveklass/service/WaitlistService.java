@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -35,12 +36,14 @@ public class WaitlistService {
     private final UserRepository userRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentHistoryRepository historyRepository;
+    private final Clock clock;
 
     @Transactional
     public Waitlist join(Long userId, Long klassId) {
         User user = findUserOrThrow(userId);
         Klass klass = findKlassOrThrow(klassId);
 
+        validateKlassIsFull(klass);
         validateNoDuplicateActiveWaitlist(userId, klassId);
 
         int nextPosition = resolveNextWaitlistPosition(klassId);
@@ -48,7 +51,8 @@ public class WaitlistService {
     }
 
     @Transactional
-    public void notifyNext(Long klassId, LocalDateTime now) {
+    public void notifyNext(Long klassId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         Waitlist waitlist = waitlistRepository
                 .findFirstByKlassIdAndStatusOrderByPositionAsc(klassId, WaitlistStatus.WAITING)
                 .orElseThrow(() -> new WaitlistException(WaitlistErrorCode.WAITLIST_EMPTY));
@@ -60,8 +64,10 @@ public class WaitlistService {
     }
 
     @Transactional
-    public void convertToEnrollment(Long waitlistId, LocalDateTime now) {
+    public void convertToEnrollment(Long waitlistId, Long userId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         Waitlist waitlist = findWaitlistOrThrow(waitlistId);
+        validateWaitlistOwner(waitlist, userId);
         markWaitlistAsConverted(waitlist, now);
         saveConfirmedEnrollmentFromWaitlist(waitlist, now);
     }
@@ -74,6 +80,12 @@ public class WaitlistService {
     private Klass findKlassOrThrow(Long klassId) {
         return klassRepository.findById(klassId)
                 .orElseThrow(() -> new KlassException(KlassErrorCode.KLASS_NOT_FOUND));
+    }
+
+    private void validateKlassIsFull(Klass klass) {
+        if (!klass.isFull()) {
+            throw new WaitlistException(WaitlistErrorCode.WAITLIST_NOT_FULL);
+        }
     }
 
     private void validateNoDuplicateActiveWaitlist(Long userId, Long klassId) {
@@ -93,6 +105,12 @@ public class WaitlistService {
             return waitlistRepository.save(waitlist);
         } catch (IllegalStateException e) {
             throw new WaitlistException(WaitlistErrorCode.WAITLIST_STATE_ERROR, e);
+        }
+    }
+
+    private void validateWaitlistOwner(Waitlist waitlist, Long userId) {
+        if (!waitlist.getUser().getId().equals(userId)) {
+            throw new WaitlistException(WaitlistErrorCode.WAITLIST_FORBIDDEN);
         }
     }
 

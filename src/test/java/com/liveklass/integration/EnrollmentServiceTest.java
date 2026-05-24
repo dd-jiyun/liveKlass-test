@@ -4,6 +4,7 @@ import com.liveklass.domain.enrollment.ChangedBy;
 import com.liveklass.domain.enrollment.Enrollment;
 import com.liveklass.domain.enrollment.EnrollmentHistory;
 import com.liveklass.domain.enrollment.EnrollmentStatus;
+import com.liveklass.domain.enrollment.EnrollmentPolicy;
 import com.liveklass.domain.enrollment.HistoryReason;
 import com.liveklass.domain.klass.Klass;
 import com.liveklass.domain.user.User;
@@ -20,15 +21,21 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Transactional
@@ -39,12 +46,17 @@ class EnrollmentServiceTest {
     @Autowired KlassRepository klassRepository;
     @Autowired EnrollmentRepository enrollmentRepository;
     @Autowired EnrollmentHistoryRepository historyRepository;
+    @MockitoBean Clock clock;
 
     User creator, student;
     Klass klass;
+    Instant base;
 
     @BeforeEach
     void setUp() {
+        base = Instant.now();
+        fixClock(base);
+
         creator = userRepository.save(User.create("크리에이터", "creator@test.com", UserRole.CREATOR));
         student = userRepository.save(User.create("수강생", "student@test.com", UserRole.STUDENT));
         klass = openKlass(BigDecimal.valueOf(10000), 30, 7);
@@ -54,8 +66,17 @@ class EnrollmentServiceTest {
         Klass draft = Klass.create(creator, "스프링 강의", "설명", price, maxCapacity,
                 LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
                 LocalDate.now().plusDays(5), cancellationDeadlineDays);
-        draft.open(LocalDateTime.now());
+        draft.open(LocalDateTime.now(clock));
         return klassRepository.save(draft);
+    }
+
+    private void fixClock(Instant instant) {
+        given(clock.instant()).willReturn(instant);
+        given(clock.getZone()).willReturn(ZoneId.systemDefault());
+    }
+
+    private void advanceClock(long minutes) {
+        fixClock(base.plus(minutes, ChronoUnit.MINUTES));
     }
 
     @Nested
@@ -65,7 +86,7 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("수강 신청하면 PENDING 상태의 Enrollment가 생성된다")
         void shouldCreatePendingEnrollmentWhenEnrolled() {
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), LocalDateTime.now());
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
 
             assertThat(enrollment.getId()).isNotNull();
             assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
@@ -76,7 +97,7 @@ class EnrollmentServiceTest {
         void shouldAutoConfirmFreeKlassEnrollment() {
             Klass freeKlass = openKlass(BigDecimal.ZERO, 30, 7);
 
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), freeKlass.getId(), LocalDateTime.now());
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), freeKlass.getId());
 
             assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.CONFIRMED);
         }
@@ -86,11 +107,10 @@ class EnrollmentServiceTest {
         void shouldRejectEnrollmentWhenKlassIsFull() {
             Klass fullKlass = openKlass(BigDecimal.valueOf(10000), 1, 7);
             User student2 = userRepository.save(User.create("수강생2", "student2@test.com", UserRole.STUDENT));
-            LocalDateTime now = LocalDateTime.now();
 
-            enrollmentService.enroll(student.getId(), fullKlass.getId(), now);
+            enrollmentService.enroll(student.getId(), fullKlass.getId());
 
-            assertThatThrownBy(() -> enrollmentService.enroll(student2.getId(), fullKlass.getId(), now))
+            assertThatThrownBy(() -> enrollmentService.enroll(student2.getId(), fullKlass.getId()))
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("정원");
         }
@@ -103,22 +123,22 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("결제 확정하면 CONFIRMED 상태로 변경된다")
         void shouldConfirmEnrollmentAfterPayment() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
 
-            enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(10));
+            enrollmentService.confirm(enrollment.getId(), student.getId());
 
             assertThat(enrollmentRepository.findById(enrollment.getId()).orElseThrow().getStatus())
                     .isEqualTo(EnrollmentStatus.CONFIRMED);
         }
 
         @Test
-        @DisplayName("만료된 PENDING 상태에서 결제를 시도하면 EnrollmentException이 발생한다")
+        @DisplayName("PENDING 만료 후 결제를 시도하면 EnrollmentException이 발생한다")
         void shouldThrowEnrollmentExceptionWhenPendingExpired() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
 
-            assertThatThrownBy(() -> enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(21)))
+            advanceClock(EnrollmentPolicy.PENDING_EXPIRE_MINUTES + 1);
+
+            assertThatThrownBy(() -> enrollmentService.confirm(enrollment.getId(), student.getId()))
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("만료");
         }
@@ -131,10 +151,9 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("PENDING 상태를 취소하면 CANCELLED 상태로 변경된다")
         void shouldCancelPendingEnrollmentSuccessfully() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
 
-            enrollmentService.cancel(enrollment.getId(), student.getId(), now.plusMinutes(5));
+            enrollmentService.cancel(enrollment.getId(), student.getId());
 
             assertThat(enrollmentRepository.findById(enrollment.getId()).orElseThrow().getStatus())
                     .isEqualTo(EnrollmentStatus.CANCELLED);
@@ -143,11 +162,10 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("취소 가능 기간 내에 CONFIRMED 수강을 취소하면 CANCELLED 상태로 변경된다")
         void shouldCancelConfirmedEnrollmentWithinDeadline() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(10));
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
+            enrollmentService.confirm(enrollment.getId(), student.getId());
 
-            enrollmentService.cancel(enrollment.getId(), student.getId(), now.plusDays(3));
+            enrollmentService.cancel(enrollment.getId(), student.getId());
 
             assertThat(enrollmentRepository.findById(enrollment.getId()).orElseThrow().getStatus())
                     .isEqualTo(EnrollmentStatus.CANCELLED);
@@ -156,11 +174,12 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("취소 가능 기간을 초과한 CONFIRMED 수강 취소 시도는 EnrollmentException이 발생한다")
         void shouldThrowEnrollmentExceptionWhenCancellationDeadlinePassed() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(10));
+            // cancellationDeadlineDays(11) > daysUntilStart(10) → 취소 기한이 이미 지남
+            Klass pastDeadlineKlass = openKlass(BigDecimal.valueOf(10000), 30, 11);
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), pastDeadlineKlass.getId());
+            enrollmentService.confirm(enrollment.getId(), student.getId());
 
-            assertThatThrownBy(() -> enrollmentService.cancel(enrollment.getId(), student.getId(), now.plusDays(8)))
+            assertThatThrownBy(() -> enrollmentService.cancel(enrollment.getId(), student.getId()))
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("취소 가능 기간");
         }
@@ -173,9 +192,9 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("PENDING 상태인 강의에 중복 신청하면 거부된다")
         void shouldRejectDuplicateEnrollmentWhenPending() {
-            enrollmentService.enroll(student.getId(), klass.getId(), LocalDateTime.now());
+            enrollmentService.enroll(student.getId(), klass.getId());
 
-            assertThatThrownBy(() -> enrollmentService.enroll(student.getId(), klass.getId(), LocalDateTime.now()))
+            assertThatThrownBy(() -> enrollmentService.enroll(student.getId(), klass.getId()))
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("이미 신청");
         }
@@ -183,11 +202,10 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("CONFIRMED 상태인 강의에 중복 신청하면 거부된다")
         void shouldRejectDuplicateEnrollmentWhenConfirmed() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(10));
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
+            enrollmentService.confirm(enrollment.getId(), student.getId());
 
-            assertThatThrownBy(() -> enrollmentService.enroll(student.getId(), klass.getId(), now.plusMinutes(15)))
+            assertThatThrownBy(() -> enrollmentService.enroll(student.getId(), klass.getId()))
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("이미 신청");
         }
@@ -195,11 +213,10 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("CANCELLED 후 동일 강의에 재신청하면 PENDING으로 생성된다")
         void shouldAllowReEnrollmentAfterCancelled() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment first = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.cancel(first.getId(), student.getId(), now.plusMinutes(5));
+            Enrollment first = enrollmentService.enroll(student.getId(), klass.getId());
+            enrollmentService.cancel(first.getId(), student.getId());
 
-            Enrollment reEnroll = enrollmentService.enroll(student.getId(), klass.getId(), now.plusMinutes(10));
+            Enrollment reEnroll = enrollmentService.enroll(student.getId(), klass.getId());
 
             assertThat(reEnroll.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
         }
@@ -212,7 +229,7 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("수강 신청 시 USER_ENROLL 이력이 저장된다")
         void shouldSaveUserEnrollHistoryOnEnroll() {
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), LocalDateTime.now());
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
 
             List<EnrollmentHistory> histories = historyRepository.findByEnrollmentId(enrollment.getId());
 
@@ -225,47 +242,42 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("결제 확정 시 PAYMENT_CONFIRMED 이력이 저장된다")
         void shouldSavePaymentConfirmedHistoryOnConfirm() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.confirm(enrollment.getId(), student.getId(), now.plusMinutes(10));
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
+            enrollmentService.confirm(enrollment.getId(), student.getId());
 
             List<EnrollmentHistory> histories = historyRepository.findByEnrollmentId(enrollment.getId());
 
             assertThat(histories).hasSize(2);
-            EnrollmentHistory confirm = histories.get(1);
-            assertThat(confirm.getReason()).isEqualTo(HistoryReason.PAYMENT_CONFIRMED);
-            assertThat(confirm.getChangedBy()).isEqualTo(ChangedBy.USER);
+            assertThat(histories.get(1).getReason()).isEqualTo(HistoryReason.PAYMENT_CONFIRMED);
+            assertThat(histories.get(1).getChangedBy()).isEqualTo(ChangedBy.USER);
         }
 
         @Test
         @DisplayName("사용자 취소 시 USER_CANCEL 이력이 저장된다")
         void shouldSaveUserCancelHistoryOnCancel() {
-            LocalDateTime now = LocalDateTime.now();
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId(), now);
-            enrollmentService.cancel(enrollment.getId(), student.getId(), now.plusMinutes(5));
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), klass.getId());
+            enrollmentService.cancel(enrollment.getId(), student.getId());
 
             List<EnrollmentHistory> histories = historyRepository.findByEnrollmentId(enrollment.getId());
 
             assertThat(histories).hasSize(2);
-            EnrollmentHistory cancel = histories.get(1);
-            assertThat(cancel.getReason()).isEqualTo(HistoryReason.USER_CANCEL);
-            assertThat(cancel.getChangedBy()).isEqualTo(ChangedBy.USER);
-            assertThat(cancel.getUserId()).isEqualTo(student.getId());
+            assertThat(histories.get(1).getReason()).isEqualTo(HistoryReason.USER_CANCEL);
+            assertThat(histories.get(1).getChangedBy()).isEqualTo(ChangedBy.USER);
+            assertThat(histories.get(1).getUserId()).isEqualTo(student.getId());
         }
 
         @Test
         @DisplayName("무료 강의 자동 확정 시 SYSTEM이 처리자인 PAYMENT_CONFIRMED 이력이 저장된다")
         void shouldSaveSystemHistoryOnFreeKlassAutoConfirm() {
             Klass freeKlass = openKlass(BigDecimal.ZERO, 30, 7);
-            Enrollment enrollment = enrollmentService.enroll(student.getId(), freeKlass.getId(), LocalDateTime.now());
+            Enrollment enrollment = enrollmentService.enroll(student.getId(), freeKlass.getId());
 
             List<EnrollmentHistory> histories = historyRepository.findByEnrollmentId(enrollment.getId());
 
             assertThat(histories).hasSize(2);
-            EnrollmentHistory autoConfirm = histories.get(1);
-            assertThat(autoConfirm.getReason()).isEqualTo(HistoryReason.PAYMENT_CONFIRMED);
-            assertThat(autoConfirm.getChangedBy()).isEqualTo(ChangedBy.SYSTEM);
-            assertThat(autoConfirm.getUserId()).isNull();
+            assertThat(histories.get(1).getReason()).isEqualTo(HistoryReason.PAYMENT_CONFIRMED);
+            assertThat(histories.get(1).getChangedBy()).isEqualTo(ChangedBy.SYSTEM);
+            assertThat(histories.get(1).getUserId()).isNull();
         }
     }
 
@@ -276,7 +288,7 @@ class EnrollmentServiceTest {
         @Test
         @DisplayName("내 수강 신청 목록을 조회할 수 있다")
         void shouldReturnMyEnrollmentList() {
-            enrollmentService.enroll(student.getId(), klass.getId(), LocalDateTime.now());
+            enrollmentService.enroll(student.getId(), klass.getId());
 
             List<Enrollment> enrollments = enrollmentService.findByUser(student.getId());
 
@@ -287,7 +299,7 @@ class EnrollmentServiceTest {
         @DisplayName("다른 사용자의 신청 건은 조회되지 않는다")
         void shouldNotReturnOtherUsersEnrollments() {
             User other = userRepository.save(User.create("다른수강생", "other@test.com", UserRole.STUDENT));
-            enrollmentService.enroll(other.getId(), klass.getId(), LocalDateTime.now());
+            enrollmentService.enroll(other.getId(), klass.getId());
 
             List<Enrollment> enrollments = enrollmentService.findByUser(student.getId());
 

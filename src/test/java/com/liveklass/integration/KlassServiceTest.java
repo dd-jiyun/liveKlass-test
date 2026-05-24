@@ -13,18 +13,34 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Import(KlassServiceTest.TestClockConfig.class)
 @Transactional
 class KlassServiceTest {
+
+    @TestConfiguration
+    static class TestClockConfig {
+        @Bean
+        @Primary
+        Clock clock() {
+            return Clock.fixed(Instant.now(), ZoneId.systemDefault());
+        }
+    }
 
     @Autowired KlassService klassService;
     @Autowired UserRepository userRepository;
@@ -71,7 +87,7 @@ class KlassServiceTest {
         void shouldTransitionKlassFromDraftToOpen() {
             Klass klass = savedDraftKlass();
 
-            klassService.open(klass.getId(), creator.getId(), LocalDateTime.now());
+            klassService.open(klass.getId(), creator.getId());
 
             assertThat(klassRepository.findById(klass.getId()).orElseThrow().getStatus())
                     .isEqualTo(KlassStatus.OPEN);
@@ -81,7 +97,7 @@ class KlassServiceTest {
         @DisplayName("OPEN 강의를 CLOSED로 전환하면 상태가 CLOSED가 된다")
         void shouldTransitionKlassFromOpenToClosed() {
             Klass klass = savedDraftKlass();
-            klassService.open(klass.getId(), creator.getId(), LocalDateTime.now());
+            klassService.open(klass.getId(), creator.getId());
 
             klassService.close(klass.getId(), creator.getId());
 
@@ -108,7 +124,7 @@ class KlassServiceTest {
         @DisplayName("상태로 강의 목록을 필터링해서 조회할 수 있다")
         void shouldListKlassesByStatus() {
             Klass draft = savedDraftKlass();
-            klassService.open(draft.getId(), creator.getId(), LocalDateTime.now());
+            klassService.open(draft.getId(), creator.getId());
 
             Klass anotherDraft = savedDraftKlass();
 

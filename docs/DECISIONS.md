@@ -158,7 +158,52 @@
 
 ---
 
-## 6. 기타
+## 6. 시간 처리
+
+### 서비스 내부의 현재 시각은 Clock 빈으로 추상화한다
+
+**결정**: 서비스 계층에서 현재 시각이 필요한 경우 `LocalDateTime.now()` 직접 호출 대신 `java.time.Clock` 빈을 주입받아 `LocalDateTime.now(clock)`으로 사용합니다.
+
+임시 예약 만료(20분), 취소 가능 기간 검증, 대기 알림 수락 기간 등 시간 민감한 로직이 많습니다. `LocalDateTime.now()` 직접 호출은 테스트에서 시각을 조작할 수 없어 이런 로직을 테스트하기 어렵습니다.
+
+`Clock`을 주입받으면 테스트에서 `@MockitoBean Clock clock`으로 교체해 `given(clock.instant()).willReturn(base.plus(21, MINUTES))`처럼 원하는 시점을 정확히 지정할 수 있습니다. 운영 환경에서는 `ClockConfig`에서 `Clock.systemDefaultZone()`을 빈으로 등록해 아무런 동작 차이가 없습니다.
+
+#### 검토한 대안
+
+- **`MockedStatic<LocalDateTime>`으로 `now()` 호출 가로채기**: 전역 정적 메서드를 가로채는 방식으로 테스트 격리가 어렵고 병렬 테스트 시 상태 오염 위험이 있습니다. 코드 수정 없이 테스트만 복잡해지는 구조라 배제했습니다.
+- **현재 시각을 컨트롤러에서 파라미터로 넘기기**: 컨트롤러는 HTTP 요청/응답만 담당해야 합니다. "지금 몇 시인가"는 비즈니스 로직이 알아야 할 사항이지 컨트롤러가 결정할 사항이 아닙니다. 실제로 요청이 들어온 뒤 서비스 내부에서 여러 시각을 생성하는 경우 파라미터 전달이 맞지 않는 상황도 생깁니다.
+- **도메인 단위 테스트만 작성하고 시간 관련 통합 테스트 포기**: 임시 예약 만료, 취소 가능 기간 초과 등 핵심 비즈니스 규칙을 통합 수준에서 검증하지 못하면 실제 사용 시나리오에서 결함이 발생해도 테스트가 잡지 못합니다.
+- **`Clock` 빈 주입**: 코드 변경은 최소이고(`now()` → `now(clock)`), 테스트에서 시각을 자유롭게 제어할 수 있으며, Spring 공식 패턴이기도 합니다. 운영 코드에는 아무 영향이 없습니다.
+
+### 테스트에서 Clock을 제어하는 방법은 두 가지로 나눈다
+
+**결정**: 테스트 중 시각 변경이 필요 없으면 `Clock.fixed()` + `@TestConfiguration`을 사용하고, 같은 테스트 내에서 시각을 앞당겨야 하면 `@MockitoBean`을 사용하되 `instant()`와 `getZone()`을 항상 함께 stub하는 헬퍼로 감쌉니다.
+
+`@MockitoBean Clock clock`만 선언하고 `instant()`만 stub하면 `getZone()`이 `null`을 반환해 `LocalDateTime.now(clock)` 호출 시 `NullPointerException`이 발생합니다. 에러 메시지가 명확하지 않아 원인을 찾기 어렵습니다.
+
+`Clock.fixed(instant, zone)`은 `instant()`와 `getZone()` 모두 내장하고 있어 stub 누락 문제가 구조적으로 없습니다. 다만 빈이 Spring 컨텍스트에 올라간 이후에는 값을 교체할 수 없어 시각을 중간에 바꿔야 하는 테스트에는 사용할 수 없습니다.
+
+#### 적용 기준
+
+| 상황 | 방식 |
+|------|------|
+| 테스트 전체에서 시각이 고정됨 | `Clock.fixed()` + `@TestConfiguration` |
+| 같은 테스트 내에서 시각을 앞당겨야 함 | `@MockitoBean` + `fixClock(Instant)` 헬퍼 |
+
+`fixClock(Instant)` 헬퍼는 두 stub을 항상 함께 호출해 누락을 방지합니다.
+
+```java
+private void fixClock(Instant instant) {
+    given(clock.instant()).willReturn(instant);
+    given(clock.getZone()).willReturn(ZoneId.systemDefault());
+}
+```
+
+`ClockConfig`에는 `@ConditionalOnMissingBean`을 추가해, 테스트 컨텍스트에서 먼저 등록된 Clock 빈이 있으면 운영 빈을 등록하지 않도록 합니다.
+
+---
+
+## 7. 기타
 
 ### 알림 발송은 인터페이스로 추상화하고 실제 구현은 생략한다
 

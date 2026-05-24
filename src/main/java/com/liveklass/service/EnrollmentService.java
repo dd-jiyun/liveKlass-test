@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -35,9 +36,11 @@ public class EnrollmentService {
     private final UserRepository userRepository;
     private final WaitlistRepository waitlistRepository;
     private final NotificationService notificationService;
+    private final Clock clock;
 
     @Transactional
-    public Enrollment enroll(Long userId, Long klassId, LocalDateTime now) {
+    public Enrollment enroll(Long userId, Long klassId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         User user = findUserOrThrow(userId);
         Klass klass = findKlassWithLockOrThrow(klassId);
 
@@ -54,7 +57,8 @@ public class EnrollmentService {
     }
 
     @Transactional
-    public void confirm(Long enrollmentId, Long userId, LocalDateTime now) {
+    public void confirm(Long enrollmentId, Long userId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         Enrollment enrollment = findEnrollmentOrThrow(enrollmentId);
         EnrollmentStatus before = enrollment.getStatus();
         transitionToConfirmed(enrollment, now);
@@ -64,7 +68,8 @@ public class EnrollmentService {
     }
 
     @Transactional
-    public void cancel(Long enrollmentId, Long userId, LocalDateTime now) {
+    public void cancel(Long enrollmentId, Long userId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         Enrollment enrollment = findEnrollmentOrThrow(enrollmentId);
         EnrollmentStatus before = enrollment.getStatus();
         transitionToCancelled(enrollment, now);
@@ -103,12 +108,16 @@ public class EnrollmentService {
     }
 
     private Enrollment savePendingEnrollment(User user, Klass klass, LocalDateTime now) {
-        Enrollment enrollment = Enrollment.create(user, klass, now);
-        enrollmentRepository.save(enrollment);
-        historyRepository.save(EnrollmentHistory.record(
-                enrollment, null, EnrollmentStatus.PENDING,
-                HistoryReason.USER_ENROLL, ChangedBy.USER, user.getId()));
-        return enrollment;
+        try {
+            Enrollment enrollment = Enrollment.create(user, klass, now);
+            enrollmentRepository.save(enrollment);
+            historyRepository.save(EnrollmentHistory.record(
+                    enrollment, null, EnrollmentStatus.PENDING,
+                    HistoryReason.USER_ENROLL, ChangedBy.USER, user.getId()));
+            return enrollment;
+        } catch (IllegalStateException e) {
+            throw new EnrollmentException(EnrollmentErrorCode.ENROLLMENT_STATE_ERROR, e);
+        }
     }
 
     private void autoConfirmFreeEnrollment(Enrollment enrollment, LocalDateTime now) {

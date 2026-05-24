@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +28,7 @@ public class KlassService {
     private final KlassRepository klassRepository;
     private final UserRepository userRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final Clock clock;
 
     @Transactional
     public Klass create(Long creatorId, String title, String description, BigDecimal price,
@@ -67,7 +69,8 @@ public class KlassService {
     }
 
     @Transactional
-    public void open(Long klassId, Long creatorId, LocalDateTime now) {
+    public void open(Long klassId, Long creatorId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         Klass klass = findKlass(klassId);
         validateCreator(klass, creatorId);
         try {
