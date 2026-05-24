@@ -15,6 +15,10 @@ public interface KlassRepository extends JpaRepository<Klass, Long> {
 
     List<Klass> findByStatus(KlassStatus status);
 
+    List<Klass> findByCreatorId(Long creatorId);
+
+    List<Klass> findByCreatorIdAndStatus(Long creatorId, KlassStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select k from Klass k where k.id = :id")
     Optional<Klass> findByIdWithLock(@Param("id") Long id);
