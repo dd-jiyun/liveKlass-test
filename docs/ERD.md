@@ -36,6 +36,7 @@ erDiagram
         BIGINT user_id FK
         ENUM status "PENDING | CONFIRMED | CANCELLED"
         DATETIME pending_expires_at "임시 예약 만료 시각"
+        DATETIME confirmed_at "결제 확정 시각 (nullable)"
         DATETIME created_at
         DATETIME updated_at
     }
@@ -56,7 +57,7 @@ erDiagram
         BIGINT enrollment_id FK
         ENUM from_status "nullable"
         ENUM to_status
-        ENUM reason "USER_ENROLL | PAYMENT_CONFIRMED | USER_CANCEL | PENDING_EXPIRED"
+        ENUM reason "USER_ENROLL | PAYMENT_CONFIRMED | USER_CANCEL | PENDING_EXPIRED | WAITLIST_CONVERTED"
         ENUM changed_by "USER | SYSTEM"
         BIGINT user_id "nullable, FK 제약 없음"
         DATETIME created_at "INSERT-only"
@@ -69,8 +70,6 @@ erDiagram
     klasses ||--o{ waitlists : "klass_id"
     enrollments ||--o{ enrollment_histories : "enrollment_id"
 ```
-
----
 
 ## 테이블 정의
 
@@ -117,6 +116,7 @@ erDiagram
 | user_id | BIGINT | NOT NULL, FK → users.id | |
 | status | ENUM('PENDING', 'CONFIRMED', 'CANCELLED') | NOT NULL | |
 | pending_expires_at | DATETIME | NULL | PENDING일 때만 유효 |
+| confirmed_at | DATETIME | NULL | 결제 확정 시각 |
 | created_at | DATETIME | NOT NULL | |
 | updated_at | DATETIME | NOT NULL | |
 
@@ -139,7 +139,7 @@ erDiagram
 | created_at | DATETIME | NOT NULL | |
 | updated_at | DATETIME | NOT NULL | |
 
-**position 채번**: `SELECT COALESCE(MAX(position), 0) + 1 FROM waitlists WHERE klass_id = ?` — 반드시 비관적 락 범위 내에서 실행. 취소·만료로 중간 position이 빠져도 재정렬하지 않음.
+**position 채번**: `SELECT COALESCE(MAX(position), 0) + 1 FROM waitlists WHERE klass_id = ?` — 반드시 비관적 락 범위 내에서 실행. 취소/만료로 중간 position이 빠져도 재정렬하지 않음.
 
 **인덱스**
 - `idx_waitlists_klass_position` — (klass_id, position)
@@ -154,15 +154,13 @@ erDiagram
 | enrollment_id | BIGINT | NOT NULL, FK → enrollments.id | |
 | from_status | ENUM('PENDING', 'CONFIRMED', 'CANCELLED') | NULL | 최초 신청 시 null |
 | to_status | ENUM('PENDING', 'CONFIRMED', 'CANCELLED') | NOT NULL | |
-| reason | ENUM('USER_ENROLL', 'PAYMENT_CONFIRMED', 'USER_CANCEL', 'PENDING_EXPIRED') | NOT NULL | |
+| reason | ENUM('USER_ENROLL', 'PAYMENT_CONFIRMED', 'USER_CANCEL', 'PENDING_EXPIRED', 'WAITLIST_CONVERTED') | NOT NULL | |
 | changed_by | ENUM('USER', 'SYSTEM') | NOT NULL | |
 | user_id | BIGINT | NULL | SYSTEM 처리 시 null, FK 제약 없음 |
 | created_at | DATETIME | NOT NULL | INSERT-only |
 
 **인덱스**
 - `idx_histories_enrollment_id` — enrollment_id
-
----
 
 ## 상태 전이 다이어그램
 
@@ -173,7 +171,8 @@ stateDiagram-v2
     [*] --> DRAFT : 강의 생성
     DRAFT --> OPEN : 오픈 (마감일 > 오늘)
     OPEN --> CLOSED : 마감일 도달 / 수동 마감
-    CLOSED --> OPEN : 마감일 연장 후 재오픈
+    CLOSED --> DRAFT : reopen (초안으로 복원)
+    DRAFT --> OPEN : 마감일 연장 후 재오픈
 ```
 
 ### 수강 신청 (Enrollment)

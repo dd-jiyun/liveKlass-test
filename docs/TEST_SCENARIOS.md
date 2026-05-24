@@ -2,8 +2,6 @@
 
 > 비즈니스 규칙은 [BUSINESS_RULES.md](BUSINESS_RULES.md)를 참고해주세요.
 
----
-
 ## 강의 관리 (Class)
 
 | # | 시나리오 | 예상 결과 |
@@ -21,8 +19,6 @@
 | C-11 | 신청 마감일 > 시작일로 강의 등록 | 400 거부 |
 | C-12 | 취소 가능 기간 음수로 강의 등록 | 400 거부 |
 | C-13 | 정원 초과 시 강의 상태 확인 | OPEN 유지 (CLOSED 전환 없음) |
-
----
 
 ## 수강 신청 (Enrollment)
 
@@ -43,8 +39,8 @@
 | E-13 | PENDING 상태에서 사용자 수동 취소 | 즉시 CANCELLED + 수강 인원 -1 + 대기 1순위 알림 |
 | E-14 | OPEN 이후 수강료 변경 시도 | 400 거부 |
 | E-15 | OPEN 이후 최대 정원 변경 시도 | 400 거부 |
-
----
+| E-16 | 타인의 PENDING 수강 건에 결제 확정 시도 | 403 ENROLLMENT_FORBIDDEN |
+| E-17 | 타인의 CONFIRMED 수강 건에 취소 시도 | 403 ENROLLMENT_FORBIDDEN |
 
 ## 동시성 (Concurrency)
 
@@ -53,8 +49,6 @@
 | CON-01 | 정원 1명짜리 강의에 동시 신청 N건 | 1건만 PENDING 성공, 나머지 409 |
 | CON-02 | 동시 신청 후 수강 인원 정합성 | 수강 인원 == 1 (초과 없음) |
 | CON-03 | 알림 받은 대기자 + 일반 사용자 동시 신청 | 대기자 우선 통과, 일반 사용자 409 |
-
----
 
 ## 대기열 (Waitlist)
 
@@ -66,14 +60,16 @@
 | W-04 | 정원 초과 시 수강 신청 거부 응답 | 409 + 대기 등록 가능 안내 포함 |
 | W-05 | 정원 초과 후 자동 대기 등록 여부 | 자동 등록 없음, 명시적 호출 필요 |
 | W-06 | PENDING 만료 → 대기 1순위 알림 | NOTIFIED 전환 |
-| W-07 | NOTIFIED 수락 시간 내 신청 | PENDING + 수강 인원 +1 |
+| W-07 | NOTIFIED 대기자가 유료 강의 전환 요청 | PENDING 생성 + 수강 인원 +1 (20분 내 결제 필요) |
 | W-08 | NOTIFIED 수락 시간(20분) 만료 | EXPIRED + 다음 순번 NOTIFIED |
 | W-09 | CONFIRMED 취소 → 대기자 순번 처리 | 대기 1순위 NOTIFIED |
 | W-10 | 대기열 전원 수락 거부 시 강의 상태 | OPEN 유지 (수강 인원 < 최대 정원) |
 | W-11 | 크리에이터 수동 CLOSED 시 기존 대기자 처리 | WAITING/NOTIFIED 전원 자동 CANCELLED |
 | W-12 | 수동 CLOSED 후 재오픈 시 대기 순번 | 기존 순번 없음, 선착순 재신청 |
-
----
+| W-13 | NOTIFIED 대기자가 취소 | CANCELLED + 다음 순번 NOTIFIED |
+| W-14 | NOTIFIED 대기자가 무료 강의 전환 요청 | 즉시 CONFIRMED (PENDING 건너뜀) |
+| W-15 | 전환 시 정원이 이미 꽉 찬 경우 (경쟁 상황) | 409 WAITLIST_CAPACITY_EXCEEDED |
+| W-16 | WAITING 상태에서 전환 시도 | 400 WAITLIST_STATE_ERROR |
 
 ## 감사 로그 (EnrollmentHistory)
 
@@ -84,3 +80,5 @@
 | H-03 | 사용자 취소 시 | 이력 생성 (사유: USER_CANCEL, 처리자: USER) |
 | H-04 | PENDING 만료 시 | 이력 생성 (사유: PENDING_EXPIRED, 처리자: SYSTEM) |
 | H-05 | 무료 강의 자동 확정 시 | 이력 생성 (사유: PAYMENT_CONFIRMED, 처리자: SYSTEM) |
+| H-06 | 대기 전환 시 (유료 강의) | 이력 생성 (사유: WAITLIST_CONVERTED, 처리자: USER, 상태: null→PENDING) |
+| H-07 | 대기 전환 시 (무료 강의) | 이력 2건: WAITLIST_CONVERTED(USER, null→PENDING) + PAYMENT_CONFIRMED(SYSTEM, PENDING→CONFIRMED) |
