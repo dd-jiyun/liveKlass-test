@@ -42,4 +42,8 @@ public class User extends BaseTimeEntity {
         return user;
     }
 
+    public void promoteToCreator() {
+        this.role = UserRole.CREATOR;
+    }
+
 }

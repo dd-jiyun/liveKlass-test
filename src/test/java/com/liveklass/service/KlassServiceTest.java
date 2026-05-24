@@ -147,5 +147,54 @@ class KlassServiceTest {
 
             assertThat(all).hasSizeGreaterThanOrEqualTo(2);
         }
+
+        @Test
+        @DisplayName("CREATOR가 status=OPEN으로 조회하면 다른 크리에이터의 OPEN 강의도 포함된다")
+        void shouldReturnAllOpenKlassesForCreatorWhenStatusIsOpen() {
+            User otherCreator = userRepository.save(User.create("다른크리에이터", "other@test.com", UserRole.CREATOR));
+            Klass ownOpen = savedDraftKlass();
+            klassService.open(ownOpen.getId(), creator.getId());
+
+            Klass otherOpen = Klass.create(otherCreator, "다른 강의", "설명", BigDecimal.valueOf(5000),
+                    10, LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
+                    LocalDate.now().plusDays(5), 7);
+            otherOpen.open(java.time.LocalDateTime.now());
+            klassRepository.save(otherOpen);
+
+            List<Klass> result = klassService.findAll(creator.getId(), KlassStatus.OPEN);
+
+            assertThat(result).extracting(Klass::getId)
+                    .contains(ownOpen.getId(), otherOpen.getId());
+        }
+
+        @Test
+        @DisplayName("CREATOR가 status를 지정하지 않으면 자신의 강의만 조회된다")
+        void shouldReturnOnlyOwnKlassesForCreatorWhenStatusIsNull() {
+            User otherCreator = userRepository.save(User.create("다른크리에이터", "other2@test.com", UserRole.CREATOR));
+            Klass ownDraft = savedDraftKlass();
+            Klass otherDraft = Klass.create(otherCreator, "다른 강의", "설명", BigDecimal.valueOf(5000),
+                    10, LocalDate.now().plusDays(10), LocalDate.now().plusDays(40),
+                    LocalDate.now().plusDays(5), 7);
+            klassRepository.save(otherDraft);
+
+            List<Klass> result = klassService.findAll(creator.getId(), null);
+
+            assertThat(result).extracting(Klass::getId).contains(ownDraft.getId());
+            assertThat(result).extracting(Klass::getId).doesNotContain(otherDraft.getId());
+        }
+    }
+
+    @Nested
+    @DisplayName("역할 승격")
+    class PromoteUser {
+
+        @Test
+        @DisplayName("STUDENT가 promoteToCreator를 호출하면 CREATOR로 승격된다")
+        void shouldPromoteStudentToCreator() {
+            User student = userRepository.save(User.create("수강생", "student@test.com", UserRole.STUDENT));
+            student.promoteToCreator();
+
+            assertThat(student.getRole()).isEqualTo(UserRole.CREATOR);
+        }
     }
 }

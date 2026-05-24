@@ -119,6 +119,28 @@ class EnrollmentServiceTest {
                     .isInstanceOf(EnrollmentException.class)
                     .hasMessageContaining("정원");
         }
+
+        @Test
+        @DisplayName("CREATOR는 다른 크리에이터의 OPEN 강의에 수강 신청할 수 있다")
+        void shouldAllowCreatorToEnrollInOtherCreatorsKlass() {
+            User otherCreator = userRepository.save(User.create("다른크리에이터", "other@test.com", UserRole.CREATOR));
+
+            Enrollment enrollment = enrollmentService.enroll(otherCreator.getId(), klass.getId());
+
+            assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
+            assertThat(enrollment.getKlass().getId()).isEqualTo(klass.getId());
+        }
+
+        @Test
+        @DisplayName("STUDENT에서 CREATOR로 승격된 사용자도 수강 신청할 수 있다")
+        void shouldAllowPromotedCreatorToEnroll() {
+            User promoted = userRepository.save(User.create("승격유저", "promoted@test.com", UserRole.STUDENT));
+            promoted.promoteToCreator();
+
+            Enrollment enrollment = enrollmentService.enroll(promoted.getId(), klass.getId());
+
+            assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
+        }
     }
 
     @Nested

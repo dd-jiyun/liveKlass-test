@@ -127,7 +127,7 @@ public class KlassService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new KlassException(KlassErrorCode.KLASS_USER_NOT_FOUND));
 
-        if (user.getRole() == UserRole.STUDENT) {
+        if (user.getRole() == UserRole.STUDENT || status == KlassStatus.OPEN) {
             return klassRepository.findByStatus(KlassStatus.OPEN);
         }
 
