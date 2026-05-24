@@ -1,18 +1,14 @@
 package com.liveklass.service;
 
-import com.liveklass.domain.enrollment.ChangedBy;
 import com.liveklass.domain.enrollment.Enrollment;
-import com.liveklass.domain.enrollment.EnrollmentHistory;
 import com.liveklass.domain.enrollment.EnrollmentStatus;
-import com.liveklass.domain.enrollment.HistoryReason;
 import com.liveklass.domain.klass.Klass;
 import com.liveklass.domain.user.User;
-import com.liveklass.domain.waitlist.WaitlistStatus;
 import com.liveklass.global.exception.enrollment.EnrollmentErrorCode;
 import com.liveklass.global.exception.enrollment.EnrollmentException;
 import com.liveklass.global.exception.klass.KlassErrorCode;
 import com.liveklass.global.exception.klass.KlassException;
-import com.liveklass.repository.EnrollmentHistoryRepository;
+import com.liveklass.domain.waitlist.WaitlistStatus;
 import com.liveklass.repository.EnrollmentRepository;
 import com.liveklass.repository.KlassRepository;
 import com.liveklass.repository.UserRepository;
@@ -31,12 +27,13 @@ import java.util.List;
 public class EnrollmentService {
 
     private final EnrollmentRepository enrollmentRepository;
-    private final EnrollmentHistoryRepository historyRepository;
     private final KlassRepository klassRepository;
     private final UserRepository userRepository;
     private final WaitlistRepository waitlistRepository;
-    private final NotificationService notificationService;
     private final Clock clock;
+
+    private final EnrollmentHistoryService historyService;
+    private final WaitlistNotificationService waitlistNotificationService;
 
     @Transactional
     public Enrollment enroll(Long userId, Long klassId) {
@@ -46,11 +43,15 @@ public class EnrollmentService {
 
         validateNoDuplicateActiveEnrollment(userId, klassId);
         validateKlassHasCapacity(klass);
+        validateNoNotifiedWaiter(klassId);
 
         Enrollment enrollment = savePendingEnrollment(user, klass, now);
 
+        historyService.recordEnroll(enrollment, userId);
+
         if (klass.isFree()) {
-            autoConfirmFreeEnrollment(enrollment, now);
+            enrollment.autoConfirmIfFree(now);
+            historyService.recordAutoConfirm(enrollment);
         }
 
         return enrollment;
@@ -60,24 +61,22 @@ public class EnrollmentService {
     public void confirm(Long enrollmentId, Long userId) {
         LocalDateTime now = LocalDateTime.now(clock);
         Enrollment enrollment = findEnrollmentOrThrow(enrollmentId);
+        validateEnrollmentOwner(enrollment, userId);
         EnrollmentStatus before = enrollment.getStatus();
         transitionToConfirmed(enrollment, now);
-        historyRepository.save(EnrollmentHistory.record(
-                enrollment, before, EnrollmentStatus.CONFIRMED,
-                HistoryReason.PAYMENT_CONFIRMED, ChangedBy.USER, userId));
+        historyService.recordConfirm(enrollment, before, userId);
     }
 
     @Transactional
     public void cancel(Long enrollmentId, Long userId) {
         LocalDateTime now = LocalDateTime.now(clock);
         Enrollment enrollment = findEnrollmentOrThrow(enrollmentId);
+        validateEnrollmentOwner(enrollment, userId);
         EnrollmentStatus before = enrollment.getStatus();
         transitionToCancelled(enrollment, now);
-        historyRepository.save(EnrollmentHistory.record(
-                enrollment, before, EnrollmentStatus.CANCELLED,
-                HistoryReason.USER_CANCEL, ChangedBy.USER, userId));
+        historyService.recordCancel(enrollment, before, userId);
 
-        notifyNextWaitlistIfExists(enrollment.getKlass().getId(), now);
+        waitlistNotificationService.notifyNextIfNeeded(enrollment.getKlass().getId(), now);
     }
 
     public List<Enrollment> findByUser(Long userId) {
@@ -100,6 +99,12 @@ public class EnrollmentService {
         }
     }
 
+    private void validateNoNotifiedWaiter(Long klassId) {
+        if (waitlistRepository.existsByKlassIdAndStatus(klassId, WaitlistStatus.NOTIFIED)) {
+            throw new EnrollmentException(EnrollmentErrorCode.ENROLLMENT_WAITLIST_PRIORITY);
+        }
+    }
+
     private void validateNoDuplicateActiveEnrollment(Long userId, Long klassId) {
         if (enrollmentRepository.existsByUserIdAndKlassIdAndStatusIn(
                 userId, klassId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.CONFIRMED))) {
@@ -111,21 +116,12 @@ public class EnrollmentService {
         try {
             Enrollment enrollment = Enrollment.create(user, klass, now);
             enrollmentRepository.save(enrollment);
-            historyRepository.save(EnrollmentHistory.record(
-                    enrollment, null, EnrollmentStatus.PENDING,
-                    HistoryReason.USER_ENROLL, ChangedBy.USER, user.getId()));
             return enrollment;
         } catch (IllegalStateException e) {
             throw new EnrollmentException(EnrollmentErrorCode.ENROLLMENT_STATE_ERROR, e);
         }
     }
 
-    private void autoConfirmFreeEnrollment(Enrollment enrollment, LocalDateTime now) {
-        enrollment.autoConfirmIfFree(now);
-        historyRepository.save(EnrollmentHistory.record(
-                enrollment, EnrollmentStatus.PENDING, EnrollmentStatus.CONFIRMED,
-                HistoryReason.PAYMENT_CONFIRMED, ChangedBy.SYSTEM, null));
-    }
 
     private void transitionToConfirmed(Enrollment enrollment, LocalDateTime now) {
         try {
@@ -143,16 +139,15 @@ public class EnrollmentService {
         }
     }
 
-    private void notifyNextWaitlistIfExists(Long klassId, LocalDateTime now) {
-        waitlistRepository.findFirstByKlassIdAndStatusOrderByPositionAsc(klassId, WaitlistStatus.WAITING)
-                .ifPresent(waitlist -> {
-                    waitlist.markAsNotified(now);
-                    notificationService.notifyWaiter(waitlist);
-                });
-    }
 
     private Enrollment findEnrollmentOrThrow(Long enrollmentId) {
         return enrollmentRepository.findById(enrollmentId)
                 .orElseThrow(() -> new EnrollmentException(EnrollmentErrorCode.ENROLLMENT_NOT_FOUND));
+    }
+
+    private void validateEnrollmentOwner(Enrollment enrollment, Long userId) {
+        if (!enrollment.getUser().getId().equals(userId)) {
+            throw new EnrollmentException(EnrollmentErrorCode.ENROLLMENT_FORBIDDEN);
+        }
     }
 }

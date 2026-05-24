@@ -11,7 +11,9 @@ public enum WaitlistErrorCode implements ErrorCode {
     WAITLIST_DUPLICATE("WAITLIST_DUPLICATE", "이미 대기 중인 강의입니다.", HttpStatus.CONFLICT),
     WAITLIST_NOT_FULL("WAITLIST_NOT_FULL", "정원이 남아 있는 강의에는 대기 등록을 할 수 없습니다.", HttpStatus.BAD_REQUEST),
     WAITLIST_FORBIDDEN("WAITLIST_FORBIDDEN", "본인의 대기 항목만 처리할 수 있습니다.", HttpStatus.FORBIDDEN),
-    WAITLIST_STATE_ERROR("WAITLIST_STATE_ERROR", "현재 상태에서는 처리할 수 없습니다.", HttpStatus.BAD_REQUEST);
+    WAITLIST_CAPACITY_EXCEEDED("WAITLIST_CAPACITY_EXCEEDED", "현재 정원이 초과되어 수강 전환이 불가합니다.", HttpStatus.CONFLICT),
+    WAITLIST_STATE_ERROR("WAITLIST_STATE_ERROR", "현재 상태에서는 처리할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    WAITLIST_ALREADY_ENROLLED("WAITLIST_ALREADY_ENROLLED", "이미 수강 신청 내역이 있습니다.", HttpStatus.CONFLICT);
 
     private final String name;
     private final String message;
