@@ -127,7 +127,7 @@ class WaitlistTest {
             Klass klass = openKlass();
             Waitlist waitlist = Waitlist.create(STUDENT, klass, 1);
 
-            waitlist.cancelByCreator();
+            waitlist.cancel();
 
             assertThat(waitlist.getStatus()).isEqualTo(WaitlistStatus.CANCELLED);
         }
@@ -139,7 +139,7 @@ class WaitlistTest {
             Waitlist waitlist = Waitlist.create(STUDENT, klass, 1);
             waitlist.markAsNotified(LocalDateTime.now());
 
-            waitlist.cancelByCreator();
+            waitlist.cancel();
 
             assertThat(waitlist.getStatus()).isEqualTo(WaitlistStatus.CANCELLED);
         }

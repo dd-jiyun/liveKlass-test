@@ -76,8 +76,8 @@ public class Waitlist extends BaseTimeEntity {
         }
     }
 
-    public void cancelByCreator() {
-        if (!isCancellableByCreator()) {
+    public void cancel() {
+        if (status != WaitlistStatus.WAITING && status != WaitlistStatus.NOTIFIED) {
             throw new IllegalStateException("취소할 수 없는 대기 상태입니다: " + status);
         }
         this.status = WaitlistStatus.CANCELLED;
@@ -109,7 +109,4 @@ public class Waitlist extends BaseTimeEntity {
                 && now.isAfter(notifiedAt.plusMinutes(EnrollmentPolicy.NOTIFIED_ACCEPT_MINUTES));
     }
 
-    private boolean isCancellableByCreator() {
-        return status == WaitlistStatus.WAITING || status == WaitlistStatus.NOTIFIED;
-    }
 }
